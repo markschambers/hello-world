@@ -3,6 +3,9 @@ name: AEMO NEM Generation Scraper
 on:
   schedule:
     - cron: "17 * * * *"
+  push:
+    branches:
+      - master
   workflow_dispatch: {}
 
 permissions:
