@@ -2,7 +2,7 @@ name: AEMO NEM Generation Scraper
 
 on:
   schedule:
-    - cron: "17 * * * *"
+    - cron: "17,47 * * * *"
   push:
     branches:
       - master
