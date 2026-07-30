@@ -79,17 +79,21 @@ def normalize_fuel_source(descriptor: Any) -> str:
     return FUEL_SOURCE_CANONICAL.get(key, (descriptor or "Unknown").strip())
 
 
-def load_duid_map(path: str) -> Dict[str, Tuple[str, str]]:
-    """Parse the registration workbook into DUID -> (region, fuel_source)."""
+def load_duid_map(path: str) -> Dict[str, Tuple[str, str, str]]:
+    """Parse the registration workbook into DUID -> (region, fuel_source, dispatch_type).
+
+    dispatch_type is "Load" for pump/charging units (e.g. pumped-hydro pumps,
+    battery charge-side DUIDs) that draw power rather than generate it.
+    """
     workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
     sheet = workbook["PU and Scheduled Loads"]
 
-    duid_map: Dict[str, Tuple[str, str]] = {}
+    duid_map: Dict[str, Tuple[str, str, str]] = {}
     for row in sheet.iter_rows(min_row=2, values_only=True):
-        region, fuel_descriptor, duid = row[2], row[7], row[12]
+        region, fuel_descriptor, dispatch_type, duid = row[2], row[7], row[3], row[12]
         if not duid or not region:
             continue
-        duid_map[duid] = (region, normalize_fuel_source(fuel_descriptor))
+        duid_map[duid] = (region, normalize_fuel_source(fuel_descriptor), dispatch_type or "")
 
     workbook.close()
     return duid_map
@@ -129,14 +133,18 @@ def fetch_scada_snapshot(report_url: str) -> Tuple[str, List[Tuple[str, float]]]
 
 
 def aggregate_by_region_and_fuel(
-    readings: List[Tuple[str, float]], duid_map: Dict[str, Tuple[str, str]]
+    readings: List[Tuple[str, float]], duid_map: Dict[str, Tuple[str, str, str]]
 ) -> Dict[Tuple[str, str], float]:
     totals: Dict[Tuple[str, str], float] = {}
     for duid, mw in readings:
         mapping = duid_map.get(duid)
         if mapping is None:
             continue  # not a registered generating unit (e.g. interconnector metering)
-        totals[mapping] = totals.get(mapping, 0.0) + mw
+        region, fuel_source, dispatch_type = mapping
+        if dispatch_type == "Load":
+            mw = -mw  # pump/charging load draws power rather than generating it
+        key = (region, fuel_source)
+        totals[key] = totals.get(key, 0.0) + mw
     return totals
 
 
