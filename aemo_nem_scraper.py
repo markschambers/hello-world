@@ -10,6 +10,7 @@ import openpyxl
 import requests
 
 NEMWEB_SCADA_DIR = "https://nemweb.com.au/Reports/Current/Dispatch_SCADA/"
+NEMWEB_ROOFTOP_DIR = "https://nemweb.com.au/Reports/Current/ROOFTOP_PV/ACTUAL/"
 REGISTRATION_LIST_URL = (
     "https://www.aemo.com.au/-/media/files/electricity/nem/"
     "participant_information/nem-registration-and-exemption-list.xlsx"
@@ -113,6 +114,28 @@ def find_latest_scada_report(directory_url: str = NEMWEB_SCADA_DIR) -> str:
     return f"https://nemweb.com.au{latest}" if latest.startswith("/") else latest
 
 
+def find_latest_rooftop_report(directory_url: str = NEMWEB_ROOFTOP_DIR) -> str:
+    """Find the latest Rooftop PV Actual "measurement" report.
+
+    NEMWeb publishes both MEASUREMENT (metered-sample based) and SATELLITE
+    (independent satellite-derived estimate) reports for each 30-minute
+    interval; MEASUREMENT is AEMO's primary rooftop PV figure.
+    """
+    response = requests.get(directory_url, headers=BROWSER_HEADERS, timeout=20)
+    response.raise_for_status()
+
+    matches = re.findall(
+        r'HREF="([^"]+PUBLIC_ROOFTOP_PV_ACTUAL_MEASUREMENT_\d+_\d+\.zip)"',
+        response.text,
+        re.IGNORECASE,
+    )
+    if not matches:
+        raise RuntimeError("No Rooftop PV measurement reports found in NEMWeb directory listing")
+
+    latest = sorted(matches)[-1]
+    return f"https://nemweb.com.au{latest}" if latest.startswith("/") else latest
+
+
 def fetch_scada_snapshot(report_url: str) -> Tuple[str, List[Tuple[str, float]]]:
     """Download and parse a Dispatch_SCADA report into (settlement_date, [(duid, mw), ...])."""
     response = requests.get(report_url, headers=BROWSER_HEADERS, timeout=30)
@@ -130,6 +153,30 @@ def fetch_scada_snapshot(report_url: str) -> Tuple[str, List[Tuple[str, float]]]
         readings.append((row[5], float(row[6])))
 
     return settlement_date, readings
+
+
+def fetch_rooftop_snapshot(report_url: str) -> Tuple[str, Dict[Tuple[str, str], float]]:
+    """Download and parse a Rooftop PV Actual report.
+
+    Unlike Dispatch_SCADA, this report is already aggregated by region, so
+    no DUID join against the registration list is needed. Returns
+    (settlement_date, {(region, "Rooftop Solar"): mw}).
+    """
+    response = requests.get(report_url, headers=BROWSER_HEADERS, timeout=30)
+    response.raise_for_status()
+
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        content = archive.read(archive.namelist()[0]).decode("utf-8")
+
+    settlement_date = ""
+    totals: Dict[Tuple[str, str], float] = {}
+    for row in csv.reader(io.StringIO(content)):
+        if not row or row[0] != "D":
+            continue
+        settlement_date = row[4]
+        totals[(row[5], "Rooftop Solar")] = float(row[6])
+
+    return settlement_date, totals
 
 
 def aggregate_by_region_and_fuel(
@@ -182,6 +229,11 @@ def main() -> None:
     totals = aggregate_by_region_and_fuel(readings, duid_map)
     output_file = save_snapshot(settlement_date, totals)
     print(f"Appended {len(totals)} region/fuel rows to {output_file}")
+
+    rooftop_report_url = find_latest_rooftop_report()
+    rooftop_date, rooftop_totals = fetch_rooftop_snapshot(rooftop_report_url)
+    save_snapshot(rooftop_date, rooftop_totals)
+    print(f"Appended {len(rooftop_totals)} rooftop solar rows for {rooftop_date}")
 
     for (region, fuel_source), total_mw in sorted(totals.items(), key=lambda kv: -kv[1])[:10]:
         print(f"  {region:6s} {fuel_source:20s} {total_mw:>10.1f} MW")
