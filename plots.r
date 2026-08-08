@@ -49,6 +49,14 @@ geom_point(aes(x = settlement_date,y = total_mw,color = region)) +
 facet_wrap(~region) +
 theme_bw() 
 
+wind <- filter(power,fuel_source == "Wind")
+
+  ggplot(data = wind) +
+geom_line(aes(x = settlement_date, y = total_mw,group = region,color = region)) +
+geom_point(aes(x = settlement_date,y = total_mw,color = region)) +
+facet_wrap(~region) +
+theme_bw() 
+
 #all <- group_by(power,settlement_date) %>%
 #summarise(mw = sum(total_mw)) 
 
