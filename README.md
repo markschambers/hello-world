@@ -2,8 +2,10 @@
 
 `nem_scada_collector.py` collects AEMO's five-minute Dispatch SCADA reports
 and half-hourly rooftop PV measurement reports into `nem_scada.sqlite`. It
-exports region/fuel totals to `nem_generation_by_fuel.csv`, which is the input
-used by `plots.r`.
+exports region/fuel totals to `nem_generation_by_fuel_frequent.csv`, which is
+the input used by `plots.r`. The original `nem_generation_by_fuel.csv` remains
+separate for the GitHub Actions snapshot workflow, avoiding conflicts between
+the scheduled snapshots and the more frequent local collector.
 
 Install dependencies and run the collector from this folder:
 

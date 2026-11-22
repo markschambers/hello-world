@@ -32,7 +32,8 @@ from aemo_nem_scraper import ensure_registration_list, load_duid_map
 SCADA_URL = "https://nemweb.com.au/Reports/Current/Dispatch_SCADA/"
 ROOFTOP_URL = "https://nemweb.com.au/Reports/Current/ROOFTOP_PV/ACTUAL/"
 DB_PATH = "nem_scada.sqlite"
-OUTPUT_CSV = "nem_generation_by_fuel.csv"
+LEGACY_CSV = "nem_generation_by_fuel.csv"
+OUTPUT_CSV = "nem_generation_by_fuel_frequent.csv"
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -395,7 +396,7 @@ def main() -> int:
     conn = sqlite3.connect(DB_PATH)
     try:
         init_db(conn)
-        seed_export(conn, OUTPUT_CSV)
+        seed_export(conn, OUTPUT_CSV if os.path.exists(OUTPUT_CSV) else LEGACY_CSV)
         update_unit_metadata(conn, duid_map)
         if not conn.execute(
             "SELECT 1 FROM collector_state WHERE key = 'aggregation_backfilled'"

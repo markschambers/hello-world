@@ -1,4 +1,5 @@
 *.csv
+!nem_generation_by_fuel_frequent.csv
 *.xlsx
 __pycache__/
 *.png

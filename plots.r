@@ -1,7 +1,7 @@
 ###
 library(lubridate)
 library(tidyverse)
-power <- read.csv("nem_generation_by_fuel.csv") %>%
+power <- read.csv("nem_generation_by_fuel_frequent.csv") %>%
   mutate(settlement_date = ymd_hms(settlement_date),
          date_hour = round_date(settlement_date, unit = "hour")) %>%
   filter(settlement_date > ymd_hms("2026-11-18 00:00:00")) %>%
